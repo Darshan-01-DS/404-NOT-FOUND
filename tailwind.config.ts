@@ -1,0 +1,90 @@
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  darkMode: ["class"],
+  content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ["Plus Jakarta Sans", "sans-serif"],
+        serif: ["Instrument Serif", "serif"],
+      },
+      colors: {
+        ink: "var(--ink)",
+        ink2: "var(--ink2)",
+        ink3: "var(--ink3)",
+        ink4: "var(--ink4)",
+        bg: "var(--bg)",
+        surf: "var(--surf)",
+        surf2: "var(--surf2)",
+        brand: "var(--brand)",
+        brand2: "var(--brand2)",
+        "brand-bg": "var(--brand-bg)",
+        "brand-soft": "var(--brand-soft)",
+        emerald: "var(--emerald)",
+        "emerald-bg": "var(--emerald-bg)",
+        amber: "var(--amber)",
+        "amber-bg": "var(--amber-bg)",
+        rose: "var(--rose)",
+        "rose-bg": "var(--rose-bg)",
+        violet: "var(--violet)",
+        "violet-bg": "var(--violet-bg)",
+        saffron: "var(--saffron)",
+        "saffron-bg": "var(--saffron-bg)",
+        bdr: "var(--bdr)",
+        bdr2: "var(--bdr2)",
+      },
+      borderRadius: {
+        r: "var(--r)",
+        r2: "var(--r2)",
+        r3: "var(--r3)",
+        r4: "var(--r4)",
+      },
+      boxShadow: {
+        sh: "var(--sh)",
+        sh2: "var(--sh2)",
+      },
+      maxWidth: {
+        site: "1180px",
+      },
+      keyframes: {
+        pulse: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.4" },
+        },
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%": { transform: "translateX(-8px)" },
+          "40%": { transform: "translateX(8px)" },
+          "60%": { transform: "translateX(-8px)" },
+          "80%": { transform: "translateX(8px)" },
+        },
+        blink: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0" },
+        },
+        slideIn: {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        fadeIn: {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        pulse: "pulse 2s ease-in-out infinite",
+        shake: "shake 0.3s ease-in-out",
+        blink: "blink 1s step-end infinite",
+        slideIn: "slideIn 0.25s ease-out",
+        fadeIn: "fadeIn 0.3s ease-out",
+      },
+    },
+  },
+  plugins: [],
+};
+export default config;

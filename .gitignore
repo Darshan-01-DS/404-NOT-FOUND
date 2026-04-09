@@ -1,0 +1,43 @@
+# Node modules
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Production
+/build/
+/.turbo/
+
+# Local environment files
+.env*
+!.env.example
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache
+.npm/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Dependency directories
+.pnp/
+.pnp.js
+
+# Misc
+coverage/
