@@ -122,6 +122,8 @@ export interface Database {
           created_at: string;
           field_tags: string[];
           emoji: string;
+          status?: "open" | "closed" | "upcoming" | "unknown";
+          year?: "2025-26" | "2026-27";
         };
         Insert: Omit<Database["public"]["Tables"]["scholarships"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["scholarships"]["Insert"]>;

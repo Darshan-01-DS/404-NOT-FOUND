@@ -1,12 +1,28 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans, Instrument_Serif } from "next/font/google";
 import "./globals.css";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  weight: "400",
+  style: ["normal", "italic"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "ScholarArth — Turning Eligibility into Success",
   description:
     "India's most intelligent scholarship platform. Discover 8,400+ scholarships, get AI-powered match scores, and manage your applications — all in one place. Free forever.",
   keywords:
-    "scholarship India, OBC scholarship, SC ST scholarship, NSP scholarship, merit scholarship, scholarship 2025",
+    "scholarship India, OBC scholarship, SC ST scholarship, NSP scholarship, MahaDBT scholarship, merit scholarship, scholarship 2026, free scholarship India",
   openGraph: {
     title: "ScholarArth — Turning Eligibility into Success",
     description:
@@ -23,14 +39,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Instrument+Serif:ital@0;1&display=swap"
-          rel="stylesheet"
+        {/* Viewport: prevent iOS auto-zoom on input focus */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body className={`${plusJakartaSans.variable} ${instrumentSerif.variable}`} suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

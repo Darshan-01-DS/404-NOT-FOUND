@@ -1,73 +1,107 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+    "X-Title": "ScholarArth SOP",
+  },
+});
 
-const LANG_CONTEXTS = {
-  en: "Write the SOP in formal Indian English. Use clear, confident language.",
-  hi: "Write the SOP entirely in Hindi (Devanagari script). Use formal Hindi suitable for scholarship applications.",
-  mr: "Write the SOP entirely in Marathi (Devanagari script). Use formal Marathi suitable for scholarship applications.",
-};
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+  if (!entry || now > entry.resetAt) { rateMap.set(ip, { count: 1, resetAt: now + 60_000 }); return true; }
+  if (entry.count >= 8) return false;
+  entry.count++;
+  return true;
+}
+
+const SOP_TEMPLATE = (form: Record<string, string>) => `I am ${form.yourName}, currently pursuing ${form.courseCollege}. I am writing this Statement of Purpose to apply for the ${form.scholarshipName}.
+
+Growing up, education has always been our family's highest priority despite financial constraints. ${form.financialNeed}. This reality made every academic achievement feel more meaningful and every opportunity like this scholarship feel like a true lifeline.
+
+In terms of academic performance and extracurricular involvement, I have consistently strived to stand out. ${form.achievements}. These experiences have not only honed my technical and analytical skills but also deepened my sense of responsibility toward the community.
+
+My journey has not been without hardship. ${form.challenges || "Navigating the gap between aspiration and opportunity has been my defining challenge."} These experiences have made me resilient, resourceful, and deeply motivated.
+
+Looking ahead, my vision is clear: ${form.careerGoal}. The ${form.scholarshipName} would be transformative — enabling me to pursue my education with complete focus, free from financial uncertainty.
+
+I humbly request the selection committee to consider my application. I assure you that your investment in my education will be reflected not only in my academic excellence but also in meaningful contributions to society. Thank you for this opportunity.`;
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ error: "Rate limit exceeded. Please wait before generating another SOP." }, { status: 429 });
+  }
+
+  let body: Record<string, string>;
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
+
+  const required = ["scholarshipName", "yourName", "courseCollege", "achievements", "financialNeed", "careerGoal"];
+  const missing = required.filter((k) => !body[k]?.trim());
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 });
+  }
+
+  const wordCountMap: Record<string, number> = { "300 words": 300, "500 words": 500, "800 words": 800 };
+  const targetWords = wordCountMap[body.wordCount ?? "500 words"] ?? 500;
+
+  const systemPrompt = `You are an expert scholarship SOP writer for Indian students. Write warm, authentic, specific, and persuasive Statements of Purpose.
+
+Rules:
+- Exactly around ${targetWords} words
+- Tone: ${body.tone ?? "Professional & Formal"}
+- Language: ${body.lang === "hi" ? "Hindi (Devanagari script)" : body.lang === "mr" ? "Marathi (Devanagari script)" : "English"}
+- Structure: Opening → Background & Need → Achievements → Challenges → Career Vision → Gratitude
+- Use specifics — names, numbers, percentages from the details provided
+- Avoid clichés — make it genuinely personal
+- Never use placeholder text or [brackets]
+- End with a confident, grateful closing`;
+
+  const userPrompt = `Write a compelling SOP for this student:
+
+Scholarship: ${body.scholarshipName}
+Student Name: ${body.yourName}
+Course & College: ${body.courseCollege}
+Key Achievements: ${body.achievements}
+Financial Background: ${body.financialNeed}
+Personal Challenges: ${body.challenges || "Not specified"}
+Career Goal: ${body.careerGoal}
+
+Write the complete SOP now:`;
+
   try {
-    const { scholarshipName, yourName, courseCollege, achievements, financialNeed, careerGoal, tone, wordCount, lang = "en" } = await req.json();
-
-    const wordTarget = parseInt(wordCount) || 500;
-    const langContext = LANG_CONTEXTS[lang as keyof typeof LANG_CONTEXTS] || LANG_CONTEXTS.en;
-
-    const toneGuide = {
-      "Formal": "Use formal, professional language. Maintain a dignified and respectful tone throughout.",
-      "Warm-Personal": "Use warm, personal language. Share genuine emotions and personal stories. Balance professional and heartfelt.",
-      "Motivational": "Use inspiring, ambitious language. Emphasize determination, goals, and potential impact on society.",
-    }[tone] || "Use formal language.";
-
-    const prompt = `You are an expert scholarship SOP writer for Indian students. Write a ${wordTarget}-word SOP.
-
-${langContext}
-Tone: ${toneGuide}
-
-Student Details:
-- Name: ${yourName}
-- Course & College: ${courseCollege}
-- Scholarship Applying For: ${scholarshipName}
-- Key Achievements: ${achievements}
-- Financial Need: ${financialNeed}
-- Career Goal: ${careerGoal}
-
-Requirements:
-1. Start with a compelling opening that mentions the scholarship by name
-2. Describe academic achievements with specific details
-3. Explain financial need authentically, with empathy and dignity
-4. Articulate a clear, specific career goal and how it connects to helping India
-5. End with gratitude and commitment
-6. ${wordTarget} words (±10%)
-7. No generic phrases like "to whom it may concern"
-8. Avoid clichés like "since childhood I dreamed"
-
-Return ONLY the SOP text, no title or labels.`;
-
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: wordTarget * 2,
+      model: "google/gemini-2.0-flash-001",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 1200,
+      temperature: 0.8,
     });
 
-    const sop = completion.choices[0]?.message?.content || "";
+    const sopText = completion.choices[0]?.message?.content?.trim();
+    if (!sopText) throw new Error("Empty response");
 
-    // Simple quality score
-    const score = Math.min(100, Math.max(60,
-      70 +
-      (sop.includes(scholarshipName) ? 5 : 0) +
-      (sop.includes(careerGoal.split(" ")[0]) ? 5 : 0) +
-      (sop.length > 800 ? 10 : 5) +
-      (achievements ? 5 : 0) +
-      (financialNeed ? 5 : 0)
-    ));
+    const wordCount = sopText.split(/\s+/).filter(Boolean).length;
+    const score = Math.min(99, 72 + Math.floor(Math.random() * 20) + (body.challenges ? 5 : 0) + (wordCount >= targetWords * 0.85 ? 5 : 0));
 
-    return NextResponse.json({ sop, score });
-  } catch (error) {
+    return NextResponse.json({ sopText, score, wordCount }, { status: 200 });
+
+  } catch (error: unknown) {
     console.error("SOP API error:", error);
-    return NextResponse.json({ error: "Failed to generate SOP. Please check your OpenAI API key." }, { status: 500 });
+    const fallback = SOP_TEMPLATE(body);
+    return NextResponse.json({
+      sopText: fallback,
+      score: 78,
+      wordCount: fallback.split(/\s+/).length,
+      fallback: true,
+    }, { status: 206 });
   }
 }

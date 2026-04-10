@@ -1,94 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { SCHOLARSHIPS } from "@/lib/scholarships";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+  defaultHeaders: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+    "X-Title": "ScholarArth Match",
+  },
+});
+
+const rateMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateMap.get(ip);
+  if (!entry || now > entry.resetAt) { rateMap.set(ip, { count: 1, resetAt: now + 60_000 }); return true; }
+  if (entry.count >= 15) return false;
+  entry.count++;
+  return true;
+}
+
+const MATCH_SYSTEM_PROMPT = `You are ScholarArth's Match Intelligence Engine.
+Given a student's profile and their top scholarship matches, generate a SHORT (2-3 sentences) personalized insight:
+1. Why they are a strong candidate based on their specific profile
+2. Which scholarship is their best opportunity and why
+3. One actionable tip to improve their chances
+
+Rules: Be human and encouraging. Use their actual category/marks/income. Under 70 words. Mention the top scholarship by name. Simple Indian English.`;
 
 export async function POST(req: NextRequest) {
-  try {
-    const { profile } = await req.json();
-
-    const scholarshipSummaries = SCHOLARSHIPS.map((s) => ({
-      id: s.id,
-      name: s.name,
-      provider: s.provider,
-      amount: s.amount,
-      courseLevels: s.course_levels,
-      categories: s.categories,
-      genders: s.genders,
-      states: s.states,
-      minPercentage: s.min_percentage,
-      deadline: s.deadline,
-      providerType: s.provider_type,
-    }));
-
-    const prompt = `You are a scholarship matching AI for Indian students. 
-    
-Student Profile:
-- Course Level: ${profile.courseLevel}
-- Field: ${profile.field}
-- Category: ${profile.category}
-- State: ${profile.state}
-- Gender: ${profile.gender}
-- Annual Family Income: ₹${profile.income.toLocaleString("en-IN")}
-- Marks/Percentage: ${profile.minMarks}%
-
-Available Scholarships (JSON):
-${JSON.stringify(scholarshipSummaries, null, 2)}
-
-Task: Score each scholarship for this student's eligibility (0-100). Consider:
-1. Category eligibility (SC/ST/OBC/EWS/General match = +25 points)
-2. Gender eligibility (matches = +15 points)
-3. Course level match (= +20 points)
-4. State eligibility (All India or matching state = +15 points)
-5. Marks above minimum_percentage (= +15 points)
-6. Income-based need (lower income = higher score for need-based scholarships = +10 points)
-
-Return a JSON array (sorted by score descending) in this exact format:
-[
-  {
-    "id": "sch-001",
-    "percent": 92,
-    "reason": "One sentence explaining the match"
+  const ip = req.headers.get("x-forwarded-for") ?? "unknown";
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 });
   }
-]
 
-Also include an "insight" field at the top level with 2-3 sentences summarizing the student's scholarship landscape.
+  let body: { profile?: Record<string, unknown>; topMatches?: unknown[] };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid request body." }, { status: 400 }); }
 
-Respond with valid JSON only, no markdown.`;
+  const { profile, topMatches } = body;
+  if (!profile || !topMatches) {
+    return NextResponse.json({ error: "Missing profile or matches data." }, { status: 400 });
+  }
 
+  const prompt = `Student profile:
+- Category: ${profile.category}, Gender: ${profile.gender}
+- Course: ${profile.courseLevel} in ${profile.field}, State: ${profile.state}
+- Annual Income: ₹${Number(profile.income).toLocaleString("en-IN")}, Marks: ${profile.minMarks}%
+- First Gen: ${profile.isFirstGen ? "Yes" : "No"}, PwD: ${profile.disabled ? "Yes" : "No"}, Rural: ${profile.rural ? "Yes" : "No"}
+
+Top 3 matches:
+${(topMatches as Array<{name: string; provider: string; amount: number; percent: number}>)
+  .map((m, i) => `${i + 1}. ${m.name} by ${m.provider} (${m.percent}% match, ₹${m.amount.toLocaleString("en-IN")}/yr)`)
+  .join("\n")}
+
+Generate a personalized 2-3 sentence match insight:`;
+
+  try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 2000,
-      response_format: { type: "json_object" },
+      model: "google/gemini-2.0-flash-001",
+      messages: [
+        { role: "system", content: MATCH_SYSTEM_PROMPT },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 150,
+      temperature: 0.7,
     });
 
-    const raw = completion.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(raw);
+    const insight = completion.choices[0]?.message?.content?.trim() ?? null;
+    return NextResponse.json({ insight }, { status: 200 });
 
-    // Map results back to full scholarship objects
-    const results = (parsed.results || parsed).map((r: { id: string; percent: number; reason: string }) => {
-      const scholarship = SCHOLARSHIPS.find((s) => s.id === r.id);
-      return scholarship ? { scholarship, percent: r.percent, reason: r.reason } : null;
-    }).filter(Boolean);
-
-    return NextResponse.json({ results, insight: parsed.insight });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Match API error:", error);
-
-    // Fallback: local scoring
-    const { profile } = await req.clone().json();
-    const results = SCHOLARSHIPS.map((s) => {
-      let score = 50;
-      if (s.categories.length >= 5 || s.categories.includes(profile.category)) score += 20;
-      if (s.genders.includes("Any") || s.genders.includes(profile.gender)) score += 10;
-      if (!s.min_percentage || profile.minMarks >= s.min_percentage) score += 15;
-      if (s.states.length === 0 || s.states.includes(profile.state)) score += 10;
-      score = Math.min(99, Math.max(30, score));
-      return { scholarship: s, percent: score, reason: `Eligible based on your ${profile.category} category and ${profile.courseLevel} level.` };
-    }).sort((a, b) => b.percent - a.percent).slice(0, 15);
-
-    return NextResponse.json({ results, insight: null });
+    const top = (topMatches as Array<{name: string; percent: number}>)[0];
+    const fallback = `Based on your ${profile.category} category and ${profile.minMarks}% marks, you have ${(topMatches as unknown[]).length} strong scholarship matches. Your best opportunity is ${top?.name} at ${top?.percent}% compatibility — ensure your income certificate and marksheets are ready to apply immediately.`;
+    return NextResponse.json({ insight: fallback }, { status: 200 });
   }
 }

@@ -39,7 +39,7 @@ export async function verifyOTP(phone: string, token: string) {
       .eq("id", data.user.id)
       .single();
 
-    if (!userRow || !userRow.profile_complete) {
+    if (!userRow || !(userRow as any).profile_complete) {
       return { success: true, redirect: "/onboarding" };
     }
     return { success: true, redirect: "/home" };
@@ -67,7 +67,7 @@ export async function saveOnboardingProfile(formData: {
   if (!user) redirect("/");
 
   // Upsert user record
-  await supabase.from("users").upsert({
+  await (supabase.from("users") as any).upsert({
     id: user.id,
     phone: user.phone ?? "",
     full_name: formData.fullName,
@@ -75,7 +75,7 @@ export async function saveOnboardingProfile(formData: {
   });
 
   // Upsert profile
-  await supabase.from("profiles").upsert({
+  await (supabase.from("profiles") as any).upsert({
     user_id: user.id,
     course_level: formData.courseLevel as any,
     field: formData.field,

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Bell, Calendar, TrendingUp } from "lucide-react";
+import { Plus, Bell, Trophy, Trash2, ExternalLink } from "lucide-react";
 import { SCHOLARSHIPS, formatINRFull, formatDeadline, daysUntil } from "@/lib/scholarships";
 
 type AppStatus = "submitted" | "under_review" | "shortlisted" | "rejected" | "draft" | "won";
@@ -17,203 +17,268 @@ interface Application {
   match: number;
 }
 
-const MOCK_APPLICATIONS: Application[] = [
-  { id: "1", name: "HDFC Badhte Kadam Scholarship 2025", provider: "HDFC Bank", amount: 75000, deadline: "2025-08-31", status: "shortlisted", match: 91 },
-  { id: "2", name: "Tata Capital Pankh Scholarship", provider: "Tata Capital", amount: 50000, deadline: "2025-10-10", status: "submitted", match: 78 },
-  { id: "3", name: "Central Sector Scholarship Scheme", provider: "Ministry of Education", amount: 20000, deadline: "2025-09-15", status: "under_review", match: 85 },
-  { id: "4", name: "Post Matric Scholarship for OBC", provider: "Govt. of India", amount: 12000, deadline: "2025-09-30", status: "draft", match: 95 },
-  { id: "5", name: "Reliance Foundation Scholarship", provider: "Reliance Foundation", amount: 200000, deadline: "2025-11-15", status: "won", match: 73 },
-  { id: "6", name: "Swanath Scholarship Scheme", provider: "AICTE", amount: 50000, deadline: "2025-09-30", status: "rejected", match: 62 },
+const INITIAL_APPS: Application[] = [
+  { id: "app-1", name: "HDFC Badhte Kadam Scholarship", provider: "HDFC Bank", amount: 75000, deadline: "2026-08-31", status: "shortlisted", match: 91 },
+  { id: "app-2", name: "Tata Capital Pankh Scholarship", provider: "Tata Capital", amount: 50000, deadline: "2026-10-10", status: "submitted", match: 78 },
+  { id: "app-3", name: "Central Sector Scheme", provider: "Ministry of Education", amount: 20000, deadline: "2026-09-15", status: "under_review", match: 85 },
+  { id: "app-4", name: "Reliance Foundation Scholarship", provider: "Reliance Foundation", amount: 200000, deadline: "2026-11-15", status: "won", match: 73 },
 ];
 
-const WATCHLIST_IDS = ["sch-003", "sch-005", "sch-009", "sch-015"];
-const watchlistItems = SCHOLARSHIPS.filter((s) => WATCHLIST_IDS.includes(s.id));
+const INITIAL_WATCHLIST_IDS = ["sch-003", "sch-005", "sch-009", "sch-015"];
 
-const STATUS_CONFIG: Record<AppStatus, { label: string; cls: string }> = {
-  submitted:    { label: "Submitted",    cls: "status-submitted"    },
-  under_review: { label: "Under Review", cls: "status-under-review" },
-  shortlisted:  { label: "Shortlisted",  cls: "status-shortlisted"  },
-  rejected:     { label: "Rejected",     cls: "status-rejected"     },
-  draft:        { label: "Draft",        cls: "status-draft"        },
-  won:          { label: "Won 🏆",       cls: "status-won"          },
+const STATUS_CONFIG: Record<AppStatus, { label: string; bg: string; color: string }> = {
+  submitted:    { label: "Submitted",    bg: "var(--brand-light)", color: "var(--brand)" },
+  under_review: { label: "Under Review", bg: "var(--warning-bg)", color: "var(--warning)" },
+  shortlisted:  { label: "Shortlisted",  bg: "var(--success-bg)", color: "var(--success)" },
+  rejected:     { label: "Rejected",     bg: "var(--danger-bg)", color: "var(--danger)" },
+  draft:        { label: "Draft",        bg: "var(--bg-sunken)", color: "var(--text-muted)" },
+  won:          { label: "Won 🏆",       bg: "var(--warning-bg)", color: "#D97706" }, // Amber
 };
 
-const STAT_CARDS = [
-  { n: 7, label: "Total Applied", color: "var(--ink)" },
-  { n: 4, label: "Submitted", color: "var(--brand)" },
-  { n: 2, label: "Shortlisted", color: "var(--emerald)" },
-  { n: 1, label: "Won", color: "#D97706" },
-];
-
 export default function ApplicationsPage() {
-  const [apps, setApps] = useState(MOCK_APPLICATIONS);
+  const [apps, setApps] = useState<Application[]>(INITIAL_APPS);
+  const [watchlistIds, setWatchlistIds] = useState<string[]>(INITIAL_WATCHLIST_IDS);
   const [showModal, setShowModal] = useState(false);
+  const [newApp, setNewApp] = useState({ name: "", provider: "", status: "draft" as AppStatus, deadline: "", amount: 0 });
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  function getDotColor(deadline: string) {
-    const days = daysUntil(deadline);
-    if (days < 0) return "var(--rose)";
-    if (days <= 7) return "var(--amber)";
-    return "var(--emerald)";
+  // Computed state
+  const watchlistItems = useMemo(() => SCHOLARSHIPS.filter(s => watchlistIds.includes(s.id)), [watchlistIds]);
+  
+  const stats = useMemo(() => ({
+    total: apps.length,
+    submitted: apps.filter((a) => ["submitted", "under_review", "shortlisted"].includes(a.status)).length,
+    shortlisted: apps.filter((a) => a.status === "shortlisted").length,
+    won: apps.filter((a) => a.status === "won").length,
+  }), [apps]);
+
+  function handleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
   }
 
-  return (
-    <div className="container-site" style={{ padding: "28px 24px" }}>
+  const sortedApps = useMemo(() => {
+    if (!sortCol) return apps;
+    return [...apps].sort((a, b) => {
+      let aVal: string | number = "";
+      let bVal: string | number = "";
+      if (sortCol === "amount") { aVal = a.amount; bVal = b.amount; }
+      else if (sortCol === "deadline") { aVal = new Date(a.deadline).getTime(); bVal = new Date(b.deadline).getTime(); }
+      else if (sortCol === "match") { aVal = a.match; bVal = b.match; }
+      else if (sortCol === "status") { aVal = a.status; bVal = b.status; }
+      const dir = sortDir === "asc" ? 1 : -1;
+      return typeof aVal === "number" ? (aVal - (bVal as number)) * dir : String(aVal).localeCompare(String(bVal)) * dir;
+    });
+  }, [apps, sortCol, sortDir]);
 
+  function handleAddApp() {
+    if (!newApp.name || !newApp.provider) return;
+    const id = `app-${Date.now()}`;
+    setApps(prev => [...prev, { id, ...newApp, match: Math.floor(Math.random() * 20 + 80) }]);
+    setNewApp({ name: "", provider: "", status: "draft", deadline: "", amount: 0 });
+    setShowModal(false);
+  }
+
+  function deleteApp(id: string) {
+    setApps(prev => prev.filter(a => a.id !== id));
+  }
+
+  function removeFromWatchlist(id: string) {
+    setWatchlistIds(prev => prev.filter(wId => wId !== id));
+  }
+
+  const SortChevron = ({ col }: { col: string }) =>
+    sortCol === col ? <span style={{ marginLeft: 4 }}>{sortDir === "asc" ? "↑" : "↓"}</span> : null;
+
+  return (
+    <div style={{ padding: "32px 24px" }} className="animate-fade-in-up">
+      
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 32, gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>My Applications</h1>
-          <p style={{ fontSize: 13, color: "var(--ink3)" }}>Track your scholarship applications from draft to winner</p>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.5px" }}>Tracker Board</h1>
+          <p style={{ fontSize: 15, color: "var(--text-muted)" }}>Manage your applications and track strict deadlines seamlessly.</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-md" style={{ gap: 6 }}>
-          <Plus size={15} /> Log New Application
+        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-lg" style={{ gap: 8 }}>
+          <Plus size={16} /> Log Application
         </button>
       </div>
 
       {/* Stats Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
-        {STAT_CARDS.map((s) => (
-          <div key={s.label} className="card" style={{ padding: 18 }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: s.color, letterSpacing: "-.5px" }}>{s.n}</div>
-            <div style={{ fontSize: 12, color: "var(--ink3)", marginTop: 4, fontWeight: 600 }}>{s.label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 32 }}>
+        {[
+          { n: stats.total, label: "Total Applications tracked", color: "var(--text-primary)", bg: "var(--bg-surface)", border: "var(--border-medium)" },
+          { n: stats.submitted, label: "Active & Under Review", color: "var(--brand)", bg: "var(--brand-light)", border: "var(--brand)" },
+          { n: stats.shortlisted, label: "Currently Shortlisted", color: "var(--success)", bg: "var(--success-bg)", border: "var(--success)" },
+          { n: stats.won, label: "Scholarships Won 🏆", color: "#D97706", bg: "var(--warning-bg)", border: "var(--warning)" },
+        ].map((s) => (
+          <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "var(--radius-lg)", padding: "20px 24px" }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: s.color, letterSpacing: "-1px", lineHeight: 1 }}>{s.n}</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* 2-col: Table + Watchlist */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 32 }} className="tracker-grid">
+        
+        {/* Detailed Application Table */}
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+           <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border-medium)", background: "var(--bg-sunken)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+             <h2 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)" }}>Active Pipeline</h2>
+           </div>
 
-        {/* Table */}
-        <div className="card" style={{ overflow: "hidden", padding: 0 }}>
-          {/* Col headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr 1fr 1fr 80px 110px", gap: 0, background: "var(--bg)", padding: "10px 18px", borderBottom: "1px solid var(--bdr)" }}>
-            {["Scholarship", "Amount", "Deadline", "Status", "Match", "Actions"].map((h) => (
-              <div key={h} style={{ fontSize: 11, fontWeight: 800, color: "var(--ink3)", textTransform: "uppercase", letterSpacing: ".5px" }}>{h}</div>
-            ))}
-          </div>
-
-          {apps.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 6 }}>No applications yet</h3>
-              <p style={{ fontSize: 13, color: "var(--ink3)", marginBottom: 16 }}>Start tracking your scholarship applications here.</p>
-              <button onClick={() => setShowModal(true)} className="btn btn-primary btn-md">Log First Application</button>
-            </div>
-          ) : apps.map((app, i) => (
-            <div
-              key={app.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2.2fr 1fr 1fr 1fr 80px 110px",
-                alignItems: "center",
-                gap: 0,
-                padding: "14px 18px",
-                borderBottom: i < apps.length - 1 ? "1px solid var(--bdr)" : "none",
-                transition: "background .15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-            >
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3 }}>{app.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink3)", marginTop: 2 }}>{app.provider}</div>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{formatINRFull(app.amount)}</div>
-              <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>{formatDeadline(app.deadline)}</div>
-              <div><span className={STATUS_CONFIG[app.status].cls}>{STATUS_CONFIG[app.status].label}</span></div>
-              <div>
-                <span style={{
-                  fontSize: 12, fontWeight: 800,
-                  color: app.match >= 80 ? "var(--emerald)" : app.match >= 50 ? "var(--amber)" : "var(--rose)",
-                }}>
-                  {app.match}%
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: 5 }}>
-                <Link href={`/scholarship/${app.id}`} className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>View</Link>
-              </div>
-            </div>
-          ))}
+           <div style={{ overflowX: "auto" }}>
+             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                <thead>
+                   <tr style={{ background: "var(--bg-sunken)", borderBottom: "1px solid var(--border-light)" }}>
+                     {[{key: null, label: "Program"}, {key: "amount", label: "Amount"}, {key: "deadline", label: "Deadline"}, {key: "status", label: "Status"}, {key: "match", label: "Match"}, {key: null, label: ""}].map(h => (
+                       <th key={h.label} onClick={() => h.key && handleSort(h.key)} style={{ padding: "12px 24px", textAlign: "left", fontSize: 12, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", cursor: h.key ? "pointer" : "default" }}>
+                         {h.label} {h.key && <SortChevron col={h.key} />}
+                       </th>
+                     ))}
+                   </tr>
+                </thead>
+                <tbody>
+                  {sortedApps.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "64px 24px", textAlign: "center" }}>
+                        <Trophy size={48} color="var(--border-medium)" style={{ margin: "0 auto 12px" }} />
+                        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 8 }}>Empty Pipeline</div>
+                        <div style={{ fontSize: 14, color: "var(--text-muted)" }}>You haven&apos;t logged any applications yet.</div>
+                      </td>
+                    </tr>
+                  ) : sortedApps.map((app) => {
+                     const days = daysUntil(app.deadline);
+                     const isUrgent = days >= 0 && days <= 7;
+                     const config = STATUS_CONFIG[app.status];
+                     
+                     return (
+                       <tr key={app.id} style={{ borderBottom: "1px solid var(--border-light)", background: isUrgent ? "var(--warning-bg)" : "transparent", transition: "background 0.2s" }} className="hover-row">
+                          <td style={{ padding: "16px 24px" }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{app.name}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>{app.provider}</div>
+                          </td>
+                          <td style={{ padding: "16px 24px", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                            {app.amount > 0 ? formatINRFull(app.amount) : "—"}
+                          </td>
+                          <td style={{ padding: "16px 24px" }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: isUrgent ? "var(--danger)" : "var(--text-secondary)" }}>{app.deadline ? formatDeadline(app.deadline) : "—"}</div>
+                            {isUrgent && <div style={{ fontSize: 11, fontWeight: 800, color: "var(--danger)", marginTop: 4 }}>{days === 0 ? "Due Today" : `In ${days} days`}</div>}
+                          </td>
+                          <td style={{ padding: "16px 24px" }}>
+                             <span style={{ background: config.bg, color: config.color, padding: "4px 10px", borderRadius: 100, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.3px", whiteSpace: "nowrap" }}>
+                               {config.label}
+                             </span>
+                          </td>
+                          <td style={{ padding: "16px 24px" }}>
+                            {app.match > 0 ? <span style={{ fontSize: 14, fontWeight: 800, color: app.match >= 80 ? "var(--success)" : "var(--warning)" }}>{app.match}%</span> : <span style={{ color: "var(--text-disabled)" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "16px 20px", textAlign: "right", whiteSpace: "nowrap" }}>
+                             <button onClick={() => deleteApp(app.id)} className="btn btn-ghost" style={{ padding: "8px", color: "var(--danger)" }} aria-label="Delete Application">
+                               <Trash2 size={16} />
+                             </button>
+                          </td>
+                       </tr>
+                     );
+                  })}
+                </tbody>
+             </table>
+           </div>
         </div>
 
-        {/* Watchlist */}
-        <div className="card" style={{ padding: 22, height: "fit-content" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14.5, fontWeight: 800, color: "var(--ink)" }}>Want to Apply</h3>
-            <button className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 12 }}><Plus size={11} /> Add</button>
-          </div>
+        {/* Watchlist Panel */}
+        <aside>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-xl)", padding: 24, position: "sticky", top: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)" }}>Saved Watchlist</h3>
+              <span style={{ background: "var(--brand-light)", color: "var(--brand)", padding: "2px 8px", borderRadius: 100, fontSize: 12, fontWeight: 800 }}>{watchlistItems.length}</span>
+            </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {watchlistItems.map((s) => {
-              const days = daysUntil(s.deadline);
-              const dotColor = getDotColor(s.deadline);
-              const showBell = days > 0 && days <= 7;
-              return (
-                <Link key={s.id} href={`/scholarship/${s.id}`}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
-                    border: "1.5px solid var(--bdr)", borderRadius: 10, textDecoration: "none",
-                    transition: "all .15s", background: "#fff",
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)";
-                    (e.currentTarget as HTMLElement).style.background = "var(--brand-bg)";
-                  }}
-                  onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "var(--bdr)";
-                    (e.currentTarget as HTMLElement).style.background = "#fff";
-                  }}
-                >
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                    <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>{formatDeadline(s.deadline)}</span>
-                    {showBell && (
-                      <div style={{ width: 22, height: 22, background: "var(--amber-bg)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Bell size={11} color="var(--amber)" />
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
+            {watchlistItems.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)", fontSize: 13 }}>No scholarships saved yet. Browse and bookmark them to appear here.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {watchlistItems.map((s) => {
+                  const days = daysUntil(s.deadline);
+                  const isUrgent = days > 0 && days <= 14;
+                  return (
+                    <div key={s.id} style={{ border: "1px solid var(--border-light)", borderRadius: "var(--radius-md)", padding: "16px", position: "relative" }}>
+                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                         <div style={{ flex: 1, paddingRight: 24 }}>
+                           <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{s.name}</h4>
+                           <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{days > 0 ? `Closes in ${days} days` : "Deadline passed"}</div>
+                         </div>
+                         {isUrgent && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--warning)", position: "absolute", top: 18, right: 16 }} />}
+                       </div>
+                       
+                       <div style={{ display: "flex", gap: 8 }}>
+                          <Link href={`/scholarship/${s.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>
+                            View <ExternalLink size={12} />
+                          </Link>
+                          <button onClick={() => removeFromWatchlist(s.id)} className="btn btn-secondary btn-sm" style={{ color: "var(--danger)", padding: "0 12px" }}>
+                            <Trash2 size={14} />
+                          </button>
+                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
+        </aside>
       </div>
 
-      {/* Log Modal (simple) */}
+      {/* Log Application Modal */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(12,15,26,.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, boxShadow: "var(--sh2)" }}>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--ink)", marginBottom: 20 }}>Log New Application</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
-              <input className="input" placeholder="Scholarship name" aria-label="Scholarship name" />
-              <input className="input" placeholder="Provider / Organization" aria-label="Provider name" />
-              <select className="select" aria-label="Application status">
-                <option>Draft</option>
-                <option>Submitted</option>
-                <option>Under Review</option>
-                <option>Shortlisted</option>
-              </select>
-              <input className="input" type="date" aria-label="Deadline date" />
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowModal(false)} className="btn btn-ghost btn-md" style={{ flex: 1 }}>Cancel</button>
-              <button onClick={() => setShowModal(false)} className="btn btn-primary btn-md" style={{ flex: 1 }}>Save Application</button>
-            </div>
-          </div>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+           <div className="animate-scale-in" style={{ background: "var(--bg-base)", width: "100%", maxWidth: 480, borderRadius: "var(--radius-xl)", padding: 32, border: "1px solid var(--border-medium)" }}>
+             <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", marginBottom: 8 }}>Log External Application</h2>
+             <p style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>Adding a scholarship here will let you track strict portal deadlines.</p>
+
+             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 32 }}>
+                <div>
+                   <label className="field-label">Scholarship/Scheme Name</label>
+                   <input className="input" placeholder="e.g. Tata Pankh Scholarship" value={newApp.name} onChange={e => setNewApp(p => ({...p, name: e.target.value}))} />
+                </div>
+                <div>
+                   <label className="field-label">Provider Name</label>
+                   <input className="input" placeholder="e.g. Tata Capital" value={newApp.provider} onChange={e => setNewApp(p => ({...p, provider: e.target.value}))} />
+                </div>
+                <div style={{ display: "flex", gap: 16 }}>
+                   <div style={{ flex: 1 }}>
+                     <label className="field-label">Reward Amount (₹)</label>
+                     <input type="number" className="input" placeholder="Amount" value={newApp.amount || ""} onChange={e => setNewApp(p => ({...p, amount: parseInt(e.target.value) || 0}))} />
+                   </div>
+                   <div style={{ flex: 1 }}>
+                     <label className="field-label">Official Deadline</label>
+                     <input type="date" className="input" value={newApp.deadline} onChange={e => setNewApp(p => ({...p, deadline: e.target.value}))} />
+                   </div>
+                </div>
+                <div>
+                  <label className="field-label">Current Pipeline Status</label>
+                  <select className="select" value={newApp.status} onChange={e => setNewApp(p => ({...p, status: e.target.value as AppStatus}))}>
+                    <option value="draft">Draft (Preparing Docs)</option>
+                    <option value="submitted">Submitted (Waiting)</option>
+                    <option value="under_review">Under Review / Verification</option>
+                    <option value="shortlisted">Shortlisted for Interview</option>
+                    <option value="won">Application Won 🏆</option>
+                  </select>
+                </div>
+             </div>
+
+             <div style={{ display: "flex", gap: 12 }}>
+                <button className="btn btn-secondary btn-lg" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button>
+                <button className="btn btn-primary btn-lg" onClick={handleAddApp} disabled={!newApp.name || !newApp.provider} style={{ flex: 1, justifyContent: "center" }}>Save Record</button>
+             </div>
+           </div>
         </div>
       )}
 
       <style>{`
+        .hover-row:hover { background: var(--bg-sunken) !important; }
         @media (max-width: 1024px) {
-          div[style*="1fr 300px"] { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 768px) {
-          div[style*="repeat(4,1fr)"] { grid-template-columns: repeat(2,1fr) !important; }
-          div[style*="2.2fr 1fr 1fr 1fr 80px 110px"] { display: none !important; }
+          .tracker-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>

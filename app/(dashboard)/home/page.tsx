@@ -1,236 +1,297 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Sparkles, ArrowRight } from "lucide-react";
-import ScholarshipCard from "@/components/cards/ScholarshipCard";
-import { SCHOLARSHIPS } from "@/lib/scholarships";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Home — ScholarArth",
-  description: "Discover scholarships matched to your profile. Browse 8,400+ scholarships for Indian students.",
-};
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import {
+  Sparkles,
+  ArrowRight,
+  Building2,
+  Briefcase,
+  GraduationCap,
+  ShieldCheck,
+  FlaskConical,
+  Globe2,
+  Bell,
+  Clock,
+  UserCircle,
+  TrendingUp,
+  FileText,
+  Trophy,
+  ExternalLink,
+} from "lucide-react";
+import ScholarshipCard from "@/components/cards/ScholarshipCard";
+import { SCHOLARSHIPS, formatINRFull, daysUntil } from "@/lib/scholarships";
 
 const CATEGORIES = [
-  { emoji: "🏛️", name: "Government", count: 2140, color: "var(--brand-bg)", border: "var(--brand-soft)" },
-  { emoji: "🏢", name: "Corporate", count: 1830, color: "var(--violet-bg)", border: "#DDD6FE" },
-  { emoji: "👩", name: "Girls / Women", count: 980, color: "var(--saffron-bg)", border: "#FED7AA" },
-  { emoji: "🎖️", name: "SC / ST / OBC", count: 1420, color: "var(--emerald-bg)", border: "#A7F3D0" },
-  { emoji: "🔬", name: "STEM", count: 760, color: "var(--rose-bg)", border: "#FECACA" },
-  { emoji: "🌍", name: "International", count: 340, color: "var(--amber-bg)", border: "#FDE68A" },
+  { icon: Building2, name: "Government", count: 2140, color: "#1B3A6B", bg: "#E8EDF8" },
+  { icon: Briefcase, name: "Corporate", count: 1830, color: "#E07B39", bg: "#FDF3EC" },
+  { icon: GraduationCap, name: "Girls / Women", count: 980, color: "#9D174D", bg: "#FEF0FE" },
+  { icon: ShieldCheck, name: "SC / ST / OBC", count: 1420, color: "#1A7A4A", bg: "#EAF7F0" },
+  { icon: FlaskConical, name: "STEM", count: 760, color: "#5B21B6", bg: "#F5F3FF" },
+  { icon: Globe2, name: "International", count: 340, color: "#1B5FA8", bg: "#EBF3FD" },
 ];
 
-const STATS = [
-  { n: "8,400+", l: "Active Scholarships" },
-  { n: "₹2,200Cr", l: "Total Value" },
-  { n: "94%", l: "Match Accuracy" },
-  { n: "1.4L+", l: "Students Helped" },
-];
+// Animated counter hook
+function useCounter(target: number, duration = 1500) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const steps = 40;
+    const stepValue = target / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += stepValue;
+      if (current >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(current));
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return count;
+}
 
-const COURSE_LEVELS = ["Class 9", "Class 10", "Class 11", "Class 12", "UG", "PG", "PhD", "Diploma"];
-const CATEGORIES_OPT = ["General", "OBC", "SC", "ST", "EWS", "PwD"];
-const STATES = ["All States", "Maharashtra", "Delhi", "Karnataka", "Uttar Pradesh", "Tamil Nadu", "West Bengal", "Telangana"];
+export default function DashboardHome() {
+  const user = { name: "Arjun", profileComplete: 85, matches: 34, pending: 3, processing: 2 };
+  const recommendedSchols = SCHOLARSHIPS.filter(s => s.is_featured).slice(0, 3);
+  const closingSoonSchols = SCHOLARSHIPS
+    .filter(s => { const d = daysUntil(s.deadline); return d > 0 && d <= 90; })
+    .sort((a, b) => daysUntil(a.deadline) - daysUntil(b.deadline))
+    .slice(0, 3);
 
-const featuredIds = ["sch-001", "sch-002", "sch-003", "sch-009"];
-const featuredScholarships = SCHOLARSHIPS.filter((s) => featuredIds.includes(s.id));
+  const totalPotential = SCHOLARSHIPS.slice(0, 34).reduce((sum, s) => sum + (s.amount ?? 0), 0);
 
-export default function HomePage() {
+  const scholarshipsCount = useCounter(8400);
+  const studentsCount = useCounter(140000);
+
   return (
-    <div>
-      {/* ── HERO ── */}
-      <section style={{ background: "#fff", borderBottom: "1px solid var(--bdr)", padding: "52px 24px 56px" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 380px", gap: 48, alignItems: "center" }}>
+    <div style={{ paddingBottom: 64 }}>
 
-          {/* Left */}
+      {/* ── Welcome Banner ── */}
+      <section style={{
+        background: "linear-gradient(135deg, var(--brand) 0%, #0D2347 100%)",
+        padding: "40px 32px 48px",
+        borderRadius: "var(--radius-xl)",
+        margin: "24px 24px 0",
+        color: "#fff",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        {/* Decorative pattern */}
+        <div style={{ position: "absolute", top: -80, right: -40, opacity: 0.06, transform: "rotate(-15deg)" }}>
+          <GraduationCap size={320} />
+        </div>
+        <div style={{ position: "absolute", bottom: -60, left: -20, opacity: 0.04, transform: "rotate(10deg)" }}>
+          <Trophy size={200} />
+        </div>
+
+        {/* Live badge */}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.12)", borderRadius: 100, padding: "4px 12px", marginBottom: 16, fontSize: 12, fontWeight: 700 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }} className="animate-pulse-dot" />
+          {scholarshipsCount.toLocaleString("en-IN")}+ scholarships updated today
+        </div>
+
+        <div style={{ position: "relative", zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 20 }}>
           <div>
-            {/* Eyebrow */}
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--brand-bg)", border: "1px solid var(--brand-soft)", borderRadius: 100, padding: "5px 13px", marginBottom: 20 }}>
-              <span className="animate-pulse-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--brand)", display: "inline-block" }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand2)" }}>8,400+ Scholarships · AI-Powered · Free Forever</span>
-            </div>
-
-            <h1 style={{ fontSize: "clamp(32px, 4vw, 46px)", fontWeight: 800, lineHeight: 1.12, letterSpacing: "-1.5px", color: "var(--ink)", marginBottom: 18 }}>
-              Turning <span className="hero-keyword">Eligibility</span><br />
-              into Success
+            <h1 style={{ fontSize: "clamp(24px,4vw,34px)", fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 8, lineHeight: 1.2 }}>
+              Welcome back, {user.name}! 👋
             </h1>
-
-            <p style={{ fontSize: 16, color: "var(--ink2)", lineHeight: 1.75, maxWidth: 460, marginBottom: 28 }}>
-              India&apos;s most intelligent scholarship platform. We don&apos;t just list scholarships — we analyze your profile, predict your probability, and build your personalized strategy to win.
+            <p style={{ fontSize: 15, opacity: 0.85, lineHeight: 1.6, maxWidth: 520 }}>
+              You&apos;ve unlocked <strong>{user.matches} new scholarships</strong> this week. Your profile is <strong>{user.profileComplete}% complete</strong> — add bank details to unlock government schemes.
             </p>
-
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <Link href="/match" className="btn btn-primary btn-lg" style={{ gap: 7 }}>
-                <Sparkles size={16} /> Get My AI Match
-              </Link>
-              <Link href="/browse" className="btn btn-ghost btn-lg" style={{ gap: 7 }}>
-                Browse All <ArrowRight size={16} />
-              </Link>
-            </div>
           </div>
 
-          {/* Right — Quick Search Card */}
-          <div style={{ background: "#fff", border: "1.5px solid var(--bdr2)", borderRadius: 18, padding: 22, boxShadow: "var(--sh2)" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink3)", textTransform: "uppercase", letterSpacing: ".8px", marginBottom: 16 }}>Quick Search</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink3)", marginBottom: 5 }}>Course Level</label>
-                <select className="select" style={{ fontSize: 13 }} aria-label="Course level filter">
-                  <option>Any Level</option>
-                  {COURSE_LEVELS.map((l) => <option key={l}>{l}</option>)}
-                </select>
+          {/* Quick stats row */}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {[
+              { n: user.matches, label: "Matched", icon: "🎯" },
+              { n: user.pending, label: "Urgent", icon: "⚡" },
+              { n: user.processing, label: "In Review", icon: "📋" },
+            ].map((stat) => (
+              <div key={stat.label} style={{ background: "rgba(255,255,255,0.12)", borderRadius: "var(--radius-md)", padding: "14px 20px", textAlign: "center", minWidth: 80, backdropFilter: "blur(8px)" }}>
+                <div style={{ fontSize: 24, marginBottom: 2 }}>{stat.icon}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>{stat.n}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.75, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>{stat.label}</div>
               </div>
-              <div>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink3)", marginBottom: 5 }}>Category</label>
-                <select className="select" style={{ fontSize: 13 }} aria-label="Category filter">
-                  <option>Any Category</option>
-                  {CATEGORIES_OPT.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink3)", marginBottom: 5 }}>State</label>
-                <select className="select" style={{ fontSize: 13 }} aria-label="State filter">
-                  {STATES.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink3)", marginBottom: 5 }}>Gender</label>
-                <select className="select" style={{ fontSize: 13 }} aria-label="Gender filter">
-                  <option>Any</option>
-                  <option>Female Only</option>
-                  <option>Male Only</option>
-                </select>
-              </div>
-            </div>
-            <input className="input" type="text" placeholder="Search by name, provider..." style={{ marginBottom: 12, fontSize: 14 }} aria-label="Scholarship search" />
-            <Link href="/browse" className="btn btn-primary btn-md btn-fullwidth" style={{ gap: 6 }}>
-              Search → 
-            </Link>
+            ))}
           </div>
+        </div>
+
+        {/* CTA row */}
+        <div style={{ display: "flex", gap: 12, marginTop: 28, position: "relative", zIndex: 10, flexWrap: "wrap" }}>
+          <Link href="/match" className="btn btn-primary btn-lg" style={{ gap: 8 }}>
+            <Sparkles size={16} /> View My {user.matches} Matches
+          </Link>
+          <Link href="/profile" className="btn btn-ghost btn-lg" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", gap: 8 }}>
+            Complete Profile <ArrowRight size={16} />
+          </Link>
         </div>
       </section>
 
-      {/* ── STATS BAR ── */}
-      <section style={{ background: "#fff", borderBottom: "1px solid var(--bdr)" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
-          {STATS.map((s, i) => (
-            <div
-              key={s.n}
-              style={{
-                padding: "22px 0",
-                textAlign: "center",
-                borderRight: i < 3 ? "1px solid var(--bdr)" : "none",
-              }}
-            >
-              <div style={{ fontSize: 26, fontWeight: 800, color: "var(--brand)", letterSpacing: "-.5px" }}>{s.n}</div>
-              <div style={{ fontSize: 12, color: "var(--ink3)", marginTop: 4, fontWeight: 600 }}>{s.l}</div>
+      {/* ── Stats Row ── */}
+      <section style={{ padding: "24px 24px 0" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+          {[
+            { label: "Scholarships Available", value: `${scholarshipsCount.toLocaleString("en-IN")}+`, icon: <FileText size={22} />, color: "var(--brand)", bg: "var(--brand-light)" },
+            { label: "Students Helped", value: `${Math.floor(studentsCount / 1000)}K+`, icon: <GraduationCap size={22} />, color: "var(--success)", bg: "var(--success-bg)" },
+            { label: "Potential Scholarship ₹", value: formatINRFull(totalPotential), icon: <TrendingUp size={22} />, color: "#E07B39", bg: "#FDF3EC" },
+            { label: "Active Deadlines", value: `${closingSoonSchols.length} This Week`, icon: <Bell size={22} />, color: "var(--danger)", bg: "var(--danger-bg)" },
+          ].map((s) => (
+            <div key={s.label} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-light)", borderRadius: "var(--radius-lg)", padding: "20px 24px", display: "flex", gap: 16, alignItems: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: s.bg, color: s.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {s.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color, letterSpacing: "-0.5px", lineHeight: 1.2 }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginTop: 4 }}>{s.label}</div>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── BROWSE BY CATEGORY ── */}
-      <section className="section">
-        <div className="container-site">
-          <div className="section-header">
-            <div>
-              <div className="section-title">Browse by Category</div>
-              <div className="section-sub">Find scholarships tailored to your background</div>
+      {/* ── Scholarship Roadmap ── */}
+      <section style={{ padding: "32px 24px 0" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 16, letterSpacing: "-0.3px" }}>Your Scholarship Roadmap</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+
+          <Link href="/profile" style={{ display: "block", textDecoration: "none" }} className="hover-lift">
+            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-lg)", padding: 24, height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--brand-light)", color: "var(--brand)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <UserCircle size={22} />
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--brand)", background: "var(--brand-light)", padding: "3px 10px", borderRadius: 100 }}>{user.profileComplete}%</div>
+              </div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Complete Your Profile</h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>Add Aadhaar & bank details to unlock all government schemes.</p>
+              <div style={{ marginTop: 16, height: 4, background: "var(--bg-sunken)", borderRadius: 100 }}>
+                <div style={{ height: "100%", width: `${user.profileComplete}%`, background: "var(--brand)", borderRadius: 100, transition: "width 1s ease" }} />
+              </div>
             </div>
-            <Link href="/browse" className="btn btn-ghost btn-sm">View All →</Link>
+          </Link>
+
+          <Link href="/match" style={{ display: "block", textDecoration: "none" }} className="hover-lift">
+            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--danger-border)", borderRadius: "var(--radius-lg)", padding: 24, height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--danger-bg)", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Bell size={22} />
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--danger)", background: "var(--danger-bg)", padding: "3px 10px", borderRadius: 100 }}>{user.pending} Urgent</div>
+              </div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Apply to Your Matches</h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{user.pending} matched scholarships have deadlines within 7 days.</p>
+            </div>
+          </Link>
+
+          <Link href="/applications" style={{ display: "block", textDecoration: "none" }} className="hover-lift">
+            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-lg)", padding: 24, height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--warning-bg)", color: "var(--warning)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Clock size={22} />
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "3px 10px", borderRadius: 100 }}>{user.processing} Active</div>
+              </div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Track Application Status</h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{user.processing} submitted applications are currently under review.</p>
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Main Grid ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 28, padding: "28px 24px 0" }}>
+
+        {/* Top Recommendations */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.3px" }}>Top Recommendations</h2>
+            <Link href="/match" style={{ fontSize: 13, fontWeight: 700, color: "var(--brand)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+              See all {user.matches} <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 36 }}>
+            {recommendedSchols.map((s) => (
+              <ScholarshipCard key={s.id} scholarship={s} isTopPick={s.id === "sch-001"} />
+            ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
+          {/* Browse by Category */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.3px" }}>Browse by Category</h2>
+            <Link href="/browse" style={{ fontSize: 13, fontWeight: 700, color: "var(--brand)", textDecoration: "none" }}>View all →</Link>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {CATEGORIES.map((cat) => (
-              <Link
-                key={cat.name}
-                href={`/browse?category=${encodeURIComponent(cat.name)}`}
-                className="card card-hover"
-                style={{
-                  padding: "18px 10px",
-                  textAlign: "center",
-                  textDecoration: "none",
-                  background: cat.color,
-                  border: `1px solid ${cat.border}`,
-                }}
-              >
-                <div style={{ fontSize: 26, marginBottom: 8 }}>{cat.emoji}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>{cat.name}</div>
-                <div style={{ fontSize: 11, color: "var(--ink3)" }}>{cat.count.toLocaleString("en-IN")} scholarships</div>
+              <Link href={`/browse?category=${cat.name}`} key={cat.name} style={{ textDecoration: "none" }}>
+                <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-light)", borderRadius: "var(--radius-md)", padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, transition: "all .2s" }} className="hover-lift">
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: cat.bg, display: "flex", alignItems: "center", justifyContent: "center", color: cat.color, flexShrink: 0 }}>
+                    <cat.icon size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{cat.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cat.count.toLocaleString()} schemes</div>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
         </div>
-      </section>
 
-      {/* ── FEATURED SCHOLARSHIPS ── */}
-      <section className="section" style={{ paddingTop: 0 }}>
-        <div className="container-site">
-          <div className="section-header">
-            <div>
-              <div className="section-title">Featured Scholarships</div>
-              <div className="section-sub">High-value, actively accepting applications</div>
-            </div>
-            <Link href="/browse" className="btn btn-ghost btn-sm">View All →</Link>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            {featuredScholarships.slice(0, 3).map((s, i) => (
-              <ScholarshipCard
-                key={s.id}
-                scholarship={s}
-                isTopPick={i === 0}
-                matchPercent={[91, 78, 65][i]}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── HOW IT WORKS ── */}
-      <section className="section" style={{ background: "var(--ink)", marginBottom: 0 }}>
-        <div className="container-site">
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 10 }}>How It Works</div>
-            <h2 style={{ fontSize: 30, fontWeight: 800, color: "#fff", letterSpacing: "-.5px" }}>From Profile to Scholarship in 3 Steps</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
-            {[
-              { step: "01", icon: "🧠", title: "Build Your Profile", desc: "Tell us about your course, category, state, and income. Takes 2 minutes." },
-              { step: "02", icon: "🎯", title: "Get AI Matches", desc: "Our AI scores 8,400+ scholarships against your profile with match probabilities." },
-              { step: "03", icon: "🏆", title: "Track & Win", desc: "Manage applications, get deadline alerts, and generate winning SOPs." },
-            ].map((item) => (
-              <div key={item.step} style={{ background: "rgba(255,255,255,.06)", borderRadius: 16, padding: "28px 24px", border: "1px solid rgba(255,255,255,.1)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.3)", letterSpacing: "1px" }}>{item.step}</span>
-                  <span style={{ fontSize: 28 }}>{item.icon}</span>
-                </div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 8 }}>{item.title}</h3>
-                <p style={{ fontSize: 13.5, color: "rgba(255,255,255,.6)", lineHeight: 1.65 }}>{item.desc}</p>
+        {/* ── Sidebar ── */}
+        <div>
+          {/* Profile Card */}
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-medium)", borderRadius: "var(--radius-lg)", padding: 24, marginBottom: 20 }}>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, var(--brand), #5B21B6)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, margin: "0 auto 12px" }}>
+                {user.name[0]}
               </div>
-            ))}
+              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>{user.name}</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>BTech · Maharashtra · OBC</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, borderTop: "1px solid var(--border-light)", borderBottom: "1px solid var(--border-light)", padding: "14px 0", margin: "14px 0", textAlign: "center" }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "var(--brand)" }}>{user.matches}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>Eligible</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "var(--success)" }}>₹2.4L</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>Potential</div>
+              </div>
+            </div>
+            <Link href="/match" className="btn btn-primary btn-fullwidth" style={{ justifyContent: "center", gap: 8 }}>
+              <Sparkles size={15} /> View AI Matches
+            </Link>
           </div>
 
-          <div style={{ textAlign: "center", marginTop: 36 }}>
-            <Link href="/match" className="btn btn-amber btn-lg" style={{ gap: 8 }}>
-              <Sparkles size={16} /> Get My Free AI Match Report
+          {/* Deadlines Widget */}
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--danger-border)", borderRadius: "var(--radius-lg)", padding: 20, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 3, background: "var(--danger)" }} />
+            <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 8, marginBottom: 14, marginTop: 4 }}>
+              <Clock size={15} color="var(--danger)" /> Closing Soon
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {closingSoonSchols.map((s) => {
+                const days = daysUntil(s.deadline);
+                return (
+                  <Link key={s.id} href={`/scholarship/${s.id}`} style={{ textDecoration: "none" }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", padding: 12, background: "var(--bg-sunken)", borderRadius: "var(--radius-md)", transition: "all .15s" }} className="hover-lift">
+                      <div style={{ width: 40, height: 40, background: days <= 14 ? "var(--danger-bg)" : "var(--warning-bg)", color: days <= 14 ? "var(--danger)" : "var(--warning)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>
+                        {s.emoji}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name.split(" ").slice(0, 3).join(" ")}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: days <= 14 ? "var(--danger)" : "var(--warning)", marginTop: 2 }}>{days} days left</div>
+                      </div>
+                      <ExternalLink size={14} color="var(--text-muted)" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            <Link href="/calendar" style={{ display: "block", textAlign: "center", marginTop: 16, fontSize: 13, fontWeight: 700, color: "var(--brand)", textDecoration: "none" }}>
+              View Full Calendar →
             </Link>
           </div>
         </div>
-      </section>
-
-      <style>{`
-        @media (max-width: 1024px) {
-          section:first-child > div { grid-template-columns: 1fr !important; }
-          section:first-child > div > div:last-child { display: none; }
-        }
-        @media (max-width: 768px) {
-          section > div > div[style*="repeat(6"] { grid-template-columns: repeat(3, 1fr) !important; }
-          section > div > div[style*="repeat(3, 1fr)"] { grid-template-columns: 1fr !important; }
-          section > div > div[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 480px) {
-          h1[style*="46px"] { font-size: 32px !important; }
-        }
-      `}</style>
+      </div>
     </div>
   );
 }
